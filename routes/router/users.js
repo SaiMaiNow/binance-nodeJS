@@ -1,8 +1,15 @@
 import express from 'express';
 const router = express.Router();
 
-router.get("/", (req, res) => {
-  res.send("Hello World");
+router.post("/register", (req, res) => {
+  const { firstName, lastName, email, password, tel, birthday } = req.body;
+
+  try {
+    
+  } catch (error) {
+    console.log(error.message);
+    res.status(500).json({ message: "Internal server error" });
+  }
 });
 
 export default router;

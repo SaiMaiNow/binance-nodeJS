@@ -18,6 +18,7 @@
   },
   "homepage": "https://github.com/SaiMaiNow/binance-nodeJS#readme",
   "dependencies": {
-    "experss": "^0.0.1-security"
+    "experss": "^0.0.1-security",
+    "pg": "^8.16.3"
   }
 }

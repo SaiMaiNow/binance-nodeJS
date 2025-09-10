@@ -7,10 +7,6 @@ const https = require('https');
 const cache = new Map();
 const CACHE_TTL_MS = 5000; // 5 วินาที
 
-function getSupportedCryptos() {
-    // ไม่มีรายการเหรียญที่จำกัด - รองรับทุกเหรียญที่ Binance มี
-    return [];
-}
 
 function fetchBinancePriceUSD(pairSymbol) {
     return new Promise((resolve, reject) => {
@@ -62,4 +58,4 @@ async function getUsdPrices(symbols) {
     return results;
 }
 
-module.exports = { getSupportedCryptos, getUsdPrice, getUsdPrices };
+module.exports = { getUsdPrice, getUsdPrices };

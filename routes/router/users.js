@@ -16,6 +16,11 @@ router.post("/register", async (req, res) => {
       return res.status(400).json({ message: "User registration failed" });
     }
 
+    req.session.user = {  
+      id: result.rows[0].id,
+      email: result.rows[0].email,
+    }
+
     res.status(200).json({ message: "User registered successfully" });
   } catch (error) {
     console.log(error.message);

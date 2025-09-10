@@ -8,5 +8,5 @@ router.get("/", (req, res) => {
 });
 
 router.use('/cryptos', require('./cryptos.routes'));
-
+router.use('/Order', require('./Order.routes'));
 module.exports = router;

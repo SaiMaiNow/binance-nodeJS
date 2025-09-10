@@ -1,3 +1,6 @@
+const fs = require('fs');
+const path = require('path');
+
 function appendLogJson(entry, name) {
     const logDir = path.join(__dirname, '../log');
     if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
@@ -11,3 +14,5 @@ function appendLogJson(entry, name) {
     logs.push(entry);
     fs.writeFileSync(logPath, JSON.stringify(logs, null, 2));
 }
+
+module.exports = { appendLogJson };

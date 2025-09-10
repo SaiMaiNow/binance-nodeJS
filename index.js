@@ -10,6 +10,8 @@ dotenv.config();
 const app = express();
 const PORT = 8080;
 
+app.use(express.json());
+
 app.use(session({
   secret: 'FC3XSZYnBW',
   resave: false,

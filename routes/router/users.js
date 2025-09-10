@@ -72,25 +72,6 @@ router.put("/update", async (req, res) => {
   }
 });
 
-router.get("/me", async (req, res) => {
-  try {
-    const pool = getPool();
-    const userQuery = await pool.query('SELECT "firstName", "lastName", "email" FROM users WHERE email = $1', ['test1.doe@example.com']);
-    if (userQuery.rowCount === 0) {
-      return res.status(400).json({ message: "User not found" });
-    }
-
-    req.session.user = {
-      email: userQuery.rows[0].email
-    }
-
-    res.status(200).json({ message: "User retrieved successfully", user: userQuery.rows[0] });
-  } catch (error) {
-    console.error(error.message);
-    res.status(500).json({ message: "Internal server error" });
-  }
-});
-
 function validateBirthday(birthday) {
   const dateFormat = new Date(birthday).getFullYear();
   const currentYear = new Date().getFullYear();

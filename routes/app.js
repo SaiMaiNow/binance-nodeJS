@@ -5,4 +5,6 @@ router.get("/", (req, res) => {
   res.send("Hello World");
 });
 
+router.use(require("./router/wallet"));
+
 module.exports = router;

@@ -7,7 +7,7 @@ router.get("/", (req, res) => {
   res.send("Hello World");
 });
 
-router.use(require("./router/wallet"));
+router.use('/wallet', require('./router/wallet.js'));
 router.use('/cryptos', require('./cryptos.routes'));
 router.use('/Order', require('./Order.routes'));
 

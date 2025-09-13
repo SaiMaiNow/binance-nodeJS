@@ -9,7 +9,7 @@ router.post("/register", async (req, res) => {
   try {
     if (!fName || !lName || !tel || !email || !password || !birthday) return res.status(400).json({ message: "No fields to register" });
 
-    if(validateBirthday(birthday)) return res.status(400).json({ message: "Invalid birthday" });
+    if(!validateBirthday(birthday)) return res.status(400).json({ message: "Invalid birthday" });
 
     const pool = getPool();
     const selectQuery = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
@@ -71,6 +71,48 @@ router.put("/update", async (req, res) => {
     res.status(500).json({ message: "Internal server error" });
   }
 });
+
+router.post('/login', async (req, res) => {
+  try{
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({message: 'Email and password are required' });
+    }
+
+    const pool = getPool();
+
+    if (!pool) {
+      return res.status(500).json({
+          message: 'Database connection not available'
+      });
+    }
+
+    const getMatchUser = await pool.query(
+      'SELECT * FROM users WHERE email = $1 AND password = $2', [email, password]
+    );
+
+    const userExists = getMatchUser.rows[0];
+    if(!userExists){
+      console.error('User not found or password mismatch');
+      return res.status(401).json({message: 'Invalid email or password' });
+    }
+
+    req.session.user = {
+      email: userExists.email
+    };
+
+    res.status(200).json({message: 'Login successful' });
+    
+
+  } catch (err){
+    console.error('Login Error:', err);
+    res.status(500).json({message: 'Internal server error' });
+  }
+  
+
+});
+
 
 function validateBirthday(birthday) {
   const dateFormat = new Date(birthday).getFullYear();

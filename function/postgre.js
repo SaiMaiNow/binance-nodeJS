@@ -1,4 +1,4 @@
-import { Pool } from 'pg';
+const {Pool} = require('pg');
 
 let pool;
 
@@ -22,4 +22,4 @@ function getPool() {
     return pool;
 }
 
-export { createPool, getPool };
+module.exports = { createPool, getPool };

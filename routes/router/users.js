@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
 
-const { getPool } = require('../../function/postgre');
+// const { getPool } = require('../../function/postgre');
+const user = require('../models/User');
 
 router.post("/register", async (req, res) => {
   const { fName, lName, email, password, tel, birthday } = req.body;
@@ -80,26 +81,37 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({message: 'Email and password are required' });
     }
 
-    const pool = getPool();
+    // const pool = getPool();
 
-    if (!pool) {
-      return res.status(500).json({
-          message: 'Database connection not available'
-      });
-    }
+    // const getMatchUser = await pool.query(
+    //   'SELECT * FROM users WHERE email = $1 AND password = $2', [email, password]
+    // );
 
-    const getMatchUser = await pool.query(
-      'SELECT * FROM users WHERE email = $1 AND password = $2', [email, password]
-    );
+    const getMatchUser = await user.findOne({
+      where: { email, password } 
+    });
 
-    const userExists = getMatchUser.rows[0];
-    if(!userExists){
+    // const userExists = getMatchUser.rows[0];
+
+    // if(!userExists || getMatchUser.rowCount === 0){
+    //   console.error('User not found or password mismatch');
+    //   return res.status(401).json({message: 'Invalid email or password' });
+    // }
+    // if(!userExists || getMatchUser.rowCount === 0){
+    //   console.error('User not found or password mismatch');
+    //   return res.status(401).json({message: 'Invalid email or password' });
+    // }
+
+    if(!getMatchUser){
       console.error('User not found or password mismatch');
       return res.status(401).json({message: 'Invalid email or password' });
     }
+    // req.session.user = {
+    //   email: userExists.email
+    // };
 
     req.session.user = {
-      email: userExists.email
+      email: getMatchUser.email
     };
 
     res.status(200).json({message: 'Login successful' });
@@ -109,9 +121,27 @@ router.post('/login', async (req, res) => {
     console.error('Login Error:', err);
     res.status(500).json({message: 'Internal server error' });
   }
-  
+});
+
+router.post('/logout', async (req, res) => {
+  try{
+    req.session.destroy(err => {
+      if (err) {
+          console.error('Logout:', err);
+          return res.status(500).json({message: 'Internal server error' });
+      }
+
+      res.status(200).json({message: 'Logout successful' });
+  });
+
+  }catch(err){
+    console.error('Logout Error:', err);
+    res.status(500).json({message: 'Internal server error' });
+  }
 
 });
+
+
 
 
 function validateBirthday(birthday) {

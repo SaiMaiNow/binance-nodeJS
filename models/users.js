@@ -2,7 +2,7 @@ const { DataTypes } = require('sequelize');
 
 const { sequelize } = require('../function/postgre');
 
-const User = sequelize.define('User', {
+const User = sequelize.define('users', {
     firstName: {
         type: DataTypes.STRING
     },

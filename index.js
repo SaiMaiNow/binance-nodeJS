@@ -1,8 +1,5 @@
 const express = require("express");
-const dotenv = require('dotenv');
 const { connect, sync } = require('./function/postgre');
-
-dotenv.config();
 
 const app = express();
 const PORT = 8080;

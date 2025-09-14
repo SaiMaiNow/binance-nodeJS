@@ -4,10 +4,11 @@ const { connect, sync } = require('./function/postgre');
 const app = express();
 const PORT = 8080;
 
+app.use(express.json());
 app.use('/api', require('./routes/app'));
 
 app.listen(PORT, async () => {
   await connect();
   await sync();
-  console.log(`Server is running on port ${PORT}`);
+  console.log(`Server is running on port http://localhost:${PORT}/api/`);
 });

@@ -1,25 +1,35 @@
-import { Pool } from 'pg';
+const dotenv = require('dotenv');
+dotenv.config();
 
-let pool;
+const { Sequelize } = require('sequelize');
 
-function createPool(DB_USER, DB_PASSWORD, DB_HOST, DB_PORT, DB_NAME) {
-    pool = new Pool({
-        user: DB_USER,
-        host: DB_HOST,
-        database: DB_NAME,
-        password: DB_PASSWORD,
-        port: DB_PORT,
-    });
-
-    console.log('Postgres Connected!!');
-}
-
-function getPool() {
-    if (!pool) {
-        return null;
+const sequelize = new Sequelize(
+    process.env.DB_NAME,
+    process.env.DB_USER,
+    process.env.DB_PASSWORD,
+    {
+        host: process.env.DB_HOST,
+        port: process.env.DB_PORT,
+        dialect: 'postgres'
     }
+);
 
-    return pool;
+async function connect() {
+    try {
+        await sequelize.authenticate();
+        console.log('Connection successfully');
+    } catch (error) {
+        console.error('Database error:', error);
+    }
 }
 
-export { createPool, getPool };
+async function sync() {
+    try {
+        await sequelize.sync();
+        console.log('Connection synced successfully');
+    } catch (error) {
+        console.error('Unable to sync to the database:', error);
+    }
+}
+
+module.exports = { sequelize, connect, sync };

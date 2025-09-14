@@ -2,7 +2,7 @@ const { DataTypes } = require('sequelize');
 
 const { sequelize } = require('../function/postgre');
 
-const User = sequelize.define('users', {
+const Users = sequelize.define('users', {
     firstName: {
         type: DataTypes.STRING
     },
@@ -26,10 +26,7 @@ const User = sequelize.define('users', {
     },
     createdAt:{
         type: DataTypes.DATE
-    },
-    updatedAt:{
-        type: DataTypes.DATE
     }
 });
 
-module.exports = User;
+module.exports = Users;

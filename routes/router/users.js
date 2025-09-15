@@ -141,7 +141,39 @@ router.post('/logout', async (req, res) => {
 
 });
 
+router.get('/check', (req, res) => {
+    try {
+      if (!req.session.user) {
+          return res.status(401).json({message: 'Not authenticated' });
+      }
+  
+      return res.status(200).json({
+          message: 'Authenticated',
+          user: {
+              email: req.session.user.email,
+          }
+      });
+  
+  } catch (err) {
+      console.error('Authenticated:', err);
+      res.status(500).json({message: 'Internal server error' });
+  }
+});
 
+router.get('/profile/:id', async (req, res) => {
+  const userId = req.params.id;
+
+  try {
+    if (!userId) return res.status(400).json({ message: "User ID is required" });
+    
+
+
+    res.status(200).json({ user: userData });
+  } catch (error) {
+    console.error(error.message);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
 
 
 function validateBirthday(birthday) {

@@ -1,4 +1,4 @@
-const cryptosService = require('./cryptos.service');
+const cryptosService = require('../function/cryptos');
 const fs = require('fs');
 const path = require('path');
 

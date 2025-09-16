@@ -9,6 +9,6 @@ router.get("/", (req, res) => {
 
 router.use('/wallet', wallet.router);
 router.use('/cryptos', require("./router/cryptos"));
-router.use('/Order', require('./Order.routes'));
+router.use('/order', require("./router/orders"));
 
 module.exports = router;

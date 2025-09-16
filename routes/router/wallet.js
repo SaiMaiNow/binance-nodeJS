@@ -1,13 +1,20 @@
 const express = require('express');
 const router = express.Router();
-const { getPool } = require('../../function/postgre.js');
-const { appendLogJson } = require('../../function/log.js');
+const { appendLogJson } = require('../../function/log');
+const Wallet = require('../../models/wallet');
+const Users = require('../../models/users');
+const Crypto = require('../../models/crypto');
+
+router.post('/add/:id', addWallet);
+router.get('/get/:id', getWallet);
+router.put('/update/:id', updateWallet);
+router.delete('/delete/:id', deleteWallet);
 
 /**
  * เพิ่มเหรียญเข้า wallet ของ user (Buy)
- * POST /api/users/:id/wallet
+ * POST /api/wallet/add/:id
  */
-router.post('/add/:id', async (req, res) => {
+async function addWallet(req, res) {
     const userId = req.params.id;
     const { cryptoid, amount, price } = req.body;
 
@@ -19,31 +26,31 @@ router.post('/add/:id', async (req, res) => {
     const date = new Date().toISOString();
 
     try {
-        const pool = getPool();
-
         // ตรวจสอบว่ามี user นี้อยู่จริงหรือไม่
-        const userCheck = await pool.query(
-            `SELECT id FROM users WHERE id = $1`,
-            [userId]
-        );
-        if (userCheck.rows.length === 0) {
+        const userCheck = await Users.findOne({ where: { id: userId } });
+        if (!userCheck) {
             return res.status(400).json({ error: `User id ${userId} does not exist` });
         }
 
-        // upsert: ถ้ามีเหรียญนี้อยู่แล้วให้บวกจำนวน, ถ้ายังไม่มีให้เพิ่มใหม่
-        await pool.query(`
-            INSERT INTO wallet (userid, cryptoid, amount, price)
-            VALUES ($1, $2, $3, $4)
-            ON CONFLICT (userid, cryptoid)
-            DO UPDATE SET amount = wallet.amount + EXCLUDED.amount, price = EXCLUDED.price;
-        `, [userId, cryptoid, amount, price]);
+        const CryptoCheck = await Crypto.findOne({ where: { id: cryptoid } });
+        if (!CryptoCheck) {
+            return res.status(400).json({ error: `Cryptoid ${cryptoid} does not exist` });
+        }
 
-        // ดึงจำนวนเหรียญล่าสุดหลังอัปเดต
-        const totalResult = await pool.query(
-            `SELECT amount FROM wallet WHERE userid = $1 AND cryptoid = $2`,
-            [userId, cryptoid]
-        );
-        const totalAmount = totalResult.rows.length > 0 ? totalResult.rows[0].amount : amount;
+        // ตรวจสอบว่ามีเหรียญนี้ใน wallet หรือไม่
+        const walletCheck = await Wallet.findOne({ where: { userid: userId, cryptoid } });
+        let totalAmount;
+        // upsert: ถ้ามีเหรียญนี้อยู่แล้วให้บวกจำนวน, ถ้ายังไม่มีให้เพิ่มใหม่
+        if (walletCheck) {
+            await walletCheck.update({
+                amount: walletCheck.amount + Number(amount),
+                price: Number(price)
+            });
+            totalAmount = walletCheck.amount + Number(amount);
+        } else {
+            await Wallet.create({ userid: userId, cryptoid, amount, price });
+            totalAmount = Number(amount);
+        }
 
         // log การซื้อ
         appendLogJson({
@@ -60,30 +67,29 @@ router.post('/add/:id', async (req, res) => {
     } catch (err) {
         res.status(500).json({ error: 'Database error', detail: err.message });
     }
-});
+}
 
 /**
  * ดูเหรียญทั้งหมดใน wallet ของ user
- * GET /api/users/:id/wallet
+ * GET /api/wallet/get/:id
  */
-router.get('/get/:id', async (req, res) => {
+async function getWallet(req, res) {
     const userId = req.params.id;
     try {
-        const pool = getPool();
-
         // ดึงข้อมูลเหรียญทั้งหมดของ user
-        const result = await pool.query(
-            `SELECT cryptoid, amount, price FROM wallet WHERE userid = $1`,
-            [userId]
-        );
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'User not found' });
+        const wallets = await Wallet.findAll({
+            where: { userid: userId },
+            attributes: ['cryptoid', 'amount', 'price']
+        });
+
+        if (wallets.length === 0) {
+            return res.status(404).json({ error: 'User not found or wallet empty' });
         }
 
         // จัดรูปแบบข้อมูลสำหรับ response
         const userWallet = {
             userId,
-            history: result.rows.map(row => ({
+            history: wallets.map(row => ({
                 crypto: row.cryptoid,
                 amount: row.amount,
                 price: row.price
@@ -93,13 +99,13 @@ router.get('/get/:id', async (req, res) => {
     } catch (err) {
         res.status(500).json({ error: 'Database error', detail: err.message });
     }
-});
+}
 
 /**
  * แก้ไขจำนวนเหรียญใน wallet (set ค่าใหม่)
- * PUT /api/users/:id/wallet
+ * PUT /api/wallet/update/:id
  */
-router.put('/update/:id', async (req, res) => {
+async function updateWallet(req, res) {
     const userId = req.params.id;
     const { cryptoid, amount, price } = req.body;
 
@@ -108,16 +114,13 @@ router.put('/update/:id', async (req, res) => {
     }
 
     try {
-        const pool = getPool();
-
         // อัปเดตจำนวนและราคาของเหรียญ
-        const result = await pool.query(
-            `UPDATE wallet SET amount = $1, price = $2 WHERE userid = $3 AND cryptoid = $4 RETURNING *`,
-            [amount, price, userId, cryptoid]
-        );
-        if (result.rowCount === 0) {
+        const walletEntry = await Wallet.findOne({ where: { userid: userId, cryptoid } });
+        if (!walletEntry) {
             return res.status(404).json({ error: 'Wallet entry not found' });
         }
+
+        await walletEntry.update({ amount, price });
 
         // log การอัปเดต
         appendLogJson({
@@ -131,14 +134,14 @@ router.put('/update/:id', async (req, res) => {
         res.json({ success: true });
     } catch (err) {
         res.status(500).json({ error: 'Database error', detail: err.message });
-    };
-});
+    }
+}
 
 /**
  * ขายเหรียญ (ลบออกจาก wallet)
- * DELETE /api/users/:id/wallet
+ * DELETE /api/wallet/delete/:id
  */
-router.delete('/delete/:id', async (req, res) => {
+async function deleteWallet(req, res) {
     const userId = req.params.id;
     const { cryptoid, amount } = req.body;
 
@@ -147,18 +150,13 @@ router.delete('/delete/:id', async (req, res) => {
     }
 
     try {
-        const pool = getPool();
-
         // ตรวจสอบจำนวนเหรียญที่มีอยู่
-        const check = await pool.query(
-            `SELECT amount FROM wallet WHERE userid = $1 AND cryptoid = $2`,
-            [userId, cryptoid]
-        );
-        if (check.rows.length === 0) {
+        const walletEntry = await Wallet.findOne({ where: { userid: userId, cryptoid } });
+        if (!walletEntry) {
             return res.status(404).json({ error: 'Wallet entry not found' });
         }
 
-        const currentAmount = Number(check.rows[0].amount);
+        const currentAmount = Number(walletEntry.amount);
         const sellAmount = Number(amount);
 
         if (currentAmount < sellAmount) {
@@ -167,15 +165,9 @@ router.delete('/delete/:id', async (req, res) => {
 
         // ถ้าขายหมด ให้ลบ record ออก, ถ้ายังเหลือให้ update จำนวน
         if (currentAmount === sellAmount) {
-            await pool.query(
-                `DELETE FROM wallet WHERE userid = $1 AND cryptoid = $2`,
-                [userId, cryptoid]
-            );
+            await walletEntry.destroy();
         } else {
-            await pool.query(
-                `UPDATE wallet SET amount = $1 WHERE userid = $2 AND cryptoid = $3`,
-                [currentAmount - sellAmount, userId, cryptoid]
-            );
+            await walletEntry.update({ amount: currentAmount - sellAmount });
         }
 
         // log การขาย
@@ -192,8 +184,12 @@ router.delete('/delete/:id', async (req, res) => {
     } catch (err) {
         res.status(500).json({ error: 'Database error', detail: err.message });
     }
-});
+}
 
-
-
-module.exports = router;
+module.exports = {
+    router,
+    addWallet,
+    getWallet,
+    updateWallet,
+    deleteWallet
+};

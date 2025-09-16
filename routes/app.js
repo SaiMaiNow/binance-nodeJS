@@ -1,13 +1,13 @@
 const express = require("express");
 const path = require('path');
 const router = express.Router();
-
+const wallet = require("./router/wallet.js");
 
 router.get("/", (req, res) => {
   res.send("Hello World");
 });
 
-router.use('/wallet', require('./router/wallet.js'));
+router.use('/wallet', wallet.router);
 router.use('/cryptos', require('./cryptos.routes'));
 router.use('/Order', require('./Order.routes'));
 

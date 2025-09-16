@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const { sequelize } = require('../../function/postgre');
 const Order = require('../../models/order');
+const { addWallet, deleteWallet } = require('./wallet'); // Wallet functions
 
 const router = express.Router();
 
@@ -210,6 +211,19 @@ async function runMatching() {
                         amount: tradeAmount,
                         price: tradePrice
                     });
+
+                    // --- เพิ่มอัปเดต wallet ---
+                    // BUY: เพิ่มเหรียญให้ผู้ซื้อ
+                    await addWallet({
+                        params: { id: buy.userid },
+                        body: { cryptoid, amount: tradeAmount, price: tradePrice }
+                    }, { status: () => ({ json: () => {} }) });
+
+                    // SELL: ลบเหรียญจากผู้ขาย
+                    await deleteWallet({
+                        params: { id: sell.userid },
+                        body: { cryptoid, amount: tradeAmount }
+                    }, { status: () => ({ json: () => {} }) });
 
                     // update DB rows
                     const newBuyAmt = Number(buy.amount) - tradeAmount;

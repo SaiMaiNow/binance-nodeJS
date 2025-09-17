@@ -77,34 +77,14 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({message: 'Email and password are required' });
     }
 
-    // const pool = getPool();
-
-    // const getMatchUser = await pool.query(
-    //   'SELECT * FROM users WHERE email = $1 AND password = $2', [email, password]
-    // );
-
-    const getMatchUser = await user.findOne({
+    const getMatchUser = await Users.findOne({
       where: { email, password } 
     });
-
-    // const userExists = getMatchUser.rows[0];
-
-    // if(!userExists || getMatchUser.rowCount === 0){
-    //   console.error('User not found or password mismatch');
-    //   return res.status(401).json({message: 'Invalid email or password' });
-    // }
-    // if(!userExists || getMatchUser.rowCount === 0){
-    //   console.error('User not found or password mismatch');
-    //   return res.status(401).json({message: 'Invalid email or password' });
-    // }
 
     if(!getMatchUser){
       console.error('User not found or password mismatch');
       return res.status(401).json({message: 'Invalid email or password' });
     }
-    // req.session.user = {
-    //   email: userExists.email
-    // };
 
     req.session.user = {
       email: getMatchUser.email
@@ -119,7 +99,7 @@ router.post('/login', async (req, res) => {
   }
 });
 
-router.post('/logout', async (req, res) => {
+router.post('/logout',requireAuth, async (req, res) => {
   try{
     req.session.destroy(err => {
       if (err) {
@@ -137,12 +117,9 @@ router.post('/logout', async (req, res) => {
 
 });
 
-router.get('/check', (req, res) => {
+router.get('/check',requireAuth, (req, res) => {
     try {
-      if (!req.session.user) {
-          return res.status(401).json({message: 'Not authenticated' });
-      }
-  
+
       return res.status(200).json({
           message: 'Authenticated',
           user: {
@@ -156,20 +133,58 @@ router.get('/check', (req, res) => {
   }
 });
 
-router.get('/profile/:id', async (req, res) => {
+router.get('/:id', requireAuth, requireOwnership, async (req, res) => {
   const userId = req.params.id;
 
   try {
     if (!userId) return res.status(400).json({ message: "User ID is required" });
+
+    const userData = await Users.findOne({
+      where: { id: userId },
+      attributes: ['id', 'firstName', 'lastName', 'email', 'tel', 'birthday']
+    });
     
+    if (!userData) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    
+    res.status(200).json({ 
+      message: "User profile",
+      user: userData 
+    });
 
-
-    res.status(200).json({ user: userData });
   } catch (error) {
     console.error(error.message);
     res.status(500).json({ message: "Internal server error" });
   }
 });
+
+router.delete('/delete', requireAuth, requireOwnership, async (req, res) => {
+  try {
+    const userCache = req.session.user;
+    
+    const deleteQuery = await Users.destroy({
+      where: { email: userCache.email } 
+    });
+    
+    if (!deleteQuery) {
+      return res.status(400).json({ message: "User deletion failed" });
+    }
+
+    req.session.destroy(err => {
+      if (err) {
+          console.error('Logout:', err);
+          return res.status(500).json({message: 'Internal server error' });
+      }
+    });
+
+    return res.status(200).json({ message: "User deleted successfully" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
 
 
 function validateBirthday(birthday) {
@@ -179,6 +194,35 @@ function validateBirthday(birthday) {
   if (dateFormat > currentYear) return false;
   if (age > 100 || age < 20) return false;
   return true;
+}
+
+function requireAuth(req, res, next) {
+  if (!req.session || !req.session.user) {
+    return res.status(401).json({ message: 'Authentication required' });
+  }
+  next();
+}
+
+function requireOwnership(req, res, next) {
+  if (!req.session || !req.session.user) {
+    return res.status(401).json({ message: 'Authentication required' });
+  }
+  
+  const userId = req.params.id;
+  const sessionUserEmail = req.session.user.email; 
+  
+  Users.findOne({
+    where: { email: sessionUserEmail } 
+  }).then(user => {
+      if (!user || user.id != userId) {
+        return res.status(403).json({ message: 'Access denied - Not profile owner' });
+      }
+      next();
+    })
+    .catch(error => {
+      console.error('Ownership check error:', error);
+      res.status(500).json({ message: 'Authorization error' });
+    });
 }
 
 module.exports = router;

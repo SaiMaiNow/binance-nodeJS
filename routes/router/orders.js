@@ -4,24 +4,16 @@ const fs = require('fs');
 const { sequelize } = require('../../function/postgre');
 const { addWallet, deleteWallet } = require('../../function/wallet'); // Wallet functions
 const Order = require('../../models/order');
+const { appendLogJson } = require('../../function/log'); 
 
 const router = express.Router();
 
-// Simple JSONL logger to logs/orders/*.jsonl
-function appendOrderLog(entry, filename = 'all') {
-    try {
-        const dir = path.join(__dirname, '../../logs/orders');
-        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-        const file = path.join(dir, `${filename}.jsonl`);
-        fs.appendFileSync(file, JSON.stringify({ ts: new Date().toISOString(), ...entry }) + '\n');
-    } catch (e) {
-        // swallow log errors to not impact API flow
-    }
-}
+
 
 // State for scheduled matching
 let pendingMatch = false;
 let isMatching = false;
+let Istart = false; // เริ่ม false
 
 // API
 // GET /api/order -> list all orders
@@ -89,7 +81,7 @@ router.post('/', async (req, res) => {
         }
 
         const created = await Order.create({ userid, cryptoid, amount, price, type: upType });
-        appendOrderLog({ event: 'CREATE', order: created.toJSON() });
+        appendLogJson({ event: 'CREATE', order: created.toJSON() });
 
         // schedule matching
         pendingMatch = true;
@@ -107,23 +99,32 @@ router.post('/', async (req, res) => {
 
 */
 router.put('/:id', async (req, res) => {
-    try {
-        const id = Number(req.params.id);
-        const payload = {};
-        const allowed = ['userid', 'cryptoid', 'amount', 'price', 'type'];
-        for (const k of allowed) {
-            if (req.body.hasOwnProperty(k)) payload[k] = req.body[k];
-        }
-        if (payload.type) payload.type = String(payload.type).toUpperCase();
-        const [count] = await Order.update(payload, { where: { id } });
-        if (count === 0) return res.status(404).json({ success: false, error: { code: 'ORDER_NOT_FOUND', message: 'ไม่พบออเดอร์' } });
-        const updated = await Order.findByPk(id);
-        appendOrderLog({ event: 'UPDATE', order: updated.toJSON() });
-        pendingMatch = true;
-        res.json({ success: true, data: updated });
-    } catch (err) {
-        res.status(500).json({ success: false, error: { code: 'ORDER_UPDATE_FAILED', message: err.message } });
+  try {
+    const id = Number(req.params.id);
+    const order = await Order.findByPk(id);
+
+    if (!order) {
+      return res.status(404).json({ success: false, error: { code: 'ORDER_NOT_FOUND', message: 'ไม่พบออเดอร์' } });
     }
+
+    // อัปเดตเฉพาะค่าที่ส่งมา
+    const { userid, cryptoid, amount, price, type } = req.body;
+
+    if (userid !== undefined) order.userid = userid;
+    if (cryptoid !== undefined) order.cryptoid = cryptoid;
+    if (amount !== undefined) order.amount = amount;
+    if (price !== undefined) order.price = price;
+    if (type !== undefined) order.type = String(type).toUpperCase();
+
+    await order.save();
+
+    appendLogJson({ event: 'UPDATE', order: order.toJSON() });
+    pendingMatch = true;
+
+    res.json({ success: true, data: order });
+  } catch (err) {
+    res.status(500).json({ success: false, error: { code: 'ORDER_UPDATE_FAILED', message: err.message } });
+  }
 });
 
 // DELETE /api/order/:id -> cancel order
@@ -133,7 +134,7 @@ router.delete('/:id', async (req, res) => {
         const found = await Order.findByPk(id);
         if (!found) return res.status(404).json({ success: false, error: { code: 'ORDER_NOT_FOUND', message: 'ไม่พบออเดอร์' } });
         await Order.destroy({ where: { id } });
-        appendOrderLog({ event: 'CANCEL', order: found.toJSON() });
+        appendLogJson({ event: 'CANCEL', order: found.toJSON() });
         res.json({ success: true });
     } catch (err) {
         res.status(500).json({ success: false, error: { code: 'ORDER_DELETE_FAILED', message: err.message } });
@@ -145,7 +146,7 @@ router.post('/match', async (req, res) => {
     try {
         pendingMatch = true;
         // run in background; respond fast
-        triggerMatchSoon();
+
         res.json({ success: true, message: 'matching scheduled' });
     } catch (err) {
         res.status(500).json({ success: false, error: { code: 'MATCH_TRIGGER_FAILED', message: err.message } });
@@ -178,8 +179,7 @@ async function runMatching() {
         const map = new Map();
         for (const o of allOrders) {
             const key = o.cryptoid;
-            if (!map.has(key)) map.set(key, []);
-            map.get(key).push(o);
+            (map.get(key) ??= []).push(o);
         }
 
         // process each market within a transaction sequentially to avoid deadlock
@@ -203,7 +203,7 @@ async function runMatching() {
                     const tradePrice = Number(sell.price); // execute at sell price
 
                     // log trade
-                    appendOrderLog({
+                    appendLogJson({
                         event: 'TRADE',
                         cryptoid,
                         buyId: buy.id,
@@ -248,22 +248,20 @@ async function runMatching() {
             });
         }
     } catch (err) {
-        appendOrderLog({ event: 'MATCH_ERROR', error: String(err && err.message ? err.message : err) });
+        appendLogJson({ event: 'MATCH_ERROR', error: String(err && err.message ? err.message : err) });
     } finally {
         isMatching = false;
     }
 }
 
-function triggerMatchSoon() {
-    if (!pendingMatch) return;
-    // A simple debounce to let the interval pick it up soon
-}
 
 // Interval scheduler: every 7s if there is pending work
 setInterval(async () => {
-    if (!pendingMatch) return;
-    pendingMatch = false; // consume flag
+  // ให้รันถ้าเป็นการ start ครั้งแรก หรือมี pendingMatch
+  if (!Istart || pendingMatch) {
+    Istart = true;       // หลังจากรันครั้งแรกแล้วจะไม่เข้าเงื่อนไขนี้อีก เว้นแต่ pendingMatch=true
+    pendingMatch = false;
     await runMatching();
+  }
 }, 7000);
-
 module.exports = router;

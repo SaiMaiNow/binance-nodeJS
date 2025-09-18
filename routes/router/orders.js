@@ -179,9 +179,9 @@ async function runMatching() {
         const map = new Map();
         for (const o of allOrders) {
             const key = o.cryptoid;
-            (map.get(key) ??= []).push(o);
+            if (!map.has(key)) map.set(key, []);
+            map.get(key).push(o);
         }
-
         // process each market within a transaction sequentially to avoid deadlock
         for (const [cryptoid, orders] of map.entries()) {
             await sequelize.transaction(async (t) => {

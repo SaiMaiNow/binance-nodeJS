@@ -2,8 +2,8 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const { sequelize } = require('../../function/postgre');
+const { addWallet, deleteWallet } = require('../../function/wallet'); // Wallet functions
 const Order = require('../../models/order');
-const { addWallet, deleteWallet } = require('./wallet'); // Wallet functions
 
 const router = express.Router();
 

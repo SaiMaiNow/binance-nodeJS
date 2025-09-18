@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 
-const { Users } = require('../../models/users');
+const Users  = require('../../models/users');
 
 router.post("/register", async (req, res) => {
   const { fName, lName, email, password, tel, birthday } = req.body;
@@ -141,7 +141,7 @@ router.get('/:id', requireAuth, requireOwnership, async (req, res) => {
 
     const userData = await Users.findOne({
       where: { id: userId },
-      attributes: ['id', 'firstName', 'lastName', 'email', 'tel', 'birthday']
+      attributes: ['id', 'firstName', 'lastName', 'email', 'tel', 'birthDate']
     });
     
     if (!userData) {
@@ -159,7 +159,7 @@ router.get('/:id', requireAuth, requireOwnership, async (req, res) => {
   }
 });
 
-router.delete('/delete', requireAuth, requireOwnership, async (req, res) => {
+router.delete('/delete', requireAuth, async (req, res) => {
   try {
     const userCache = req.session.user;
     

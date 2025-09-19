@@ -1,39 +1,25 @@
 const express = require('express');
-const path = require('path');
-const fs = require('fs');
-const { sequelize } = require('../../function/postgre');
-const { addWallet, deleteWallet } = require('../../function/wallet'); // Wallet functions
-const Order = require('../../models/order');
-const { appendLogJson } = require('../../function/log'); 
+const { sequelize } = require('../../../function/postgre');
+const { addWallet, deleteWallet } = require('../../../function/wallet'); // Wallet functions
+const Order = require('../../../models/order');
+const { appendLogJson } = require('../../../function/log'); 
+const Wallet = require('../../../models/wallet');
+const Users = require('../../../models/users');
+
+const { requireAuth, requireOwnership } = require('../../../function/users');
 
 const router = express.Router();
-
-
 
 // State for scheduled matching
 let pendingMatch = false;
 let isMatching = false;
 let Istart = false; // เริ่ม false
 
-// API
-// GET /api/order -> list all orders
-/*
---- เราดึงออเดอร์ของทั้ง : BUY / SELL     มาทุกการเทรด , ทุกเหรียญที่มีคำสั่งซื้อขาย 
-*/
-router.get('/', async (req, res) => {
-    try {
-        const orders = await Order.findAll();
-        res.json({ success: true, data: orders });
-    } catch (err) {
-        res.status(500).json({ success: false, error: { code: 'ORDER_LIST_FAILED', message: err.message } });
-    }
-});
-
 // GET /api/order/book?cryptoid=1 -> order book by symbol/cryptoid
 /*
 --- คือเราดึงข้อมูลการซื้อขายมาทั้ง 2 ฝั่งคือ :  BUY / SELL        !! แต่เฉพาะเหรียญที่เราเรียกนะ ตาม id ของเหรียญนั้นๆ (เช่น  BTC : _id:1_ )
 */
-router.get('/book', async (req, res) => {
+router.get('/book', requireAuth, async (req, res) => {
     try {
         const where = {};
         if (req.query.cryptoid) where.cryptoid = Number(req.query.cryptoid);
@@ -69,19 +55,47 @@ router.get('/book', async (req, res) => {
   "type": "SELL"
 }
 */
-router.post('/', async (req, res) => {
+router.post('/', requireOwnership, async (req, res) => {
     try {
-        const { userid, cryptoid, amount, price, type } = req.body || {};
+        const { id, cryptoid, amount, price, type } = req.body || {};
+        const userid = id;
         if (!userid || !cryptoid || !amount || !price || !type) {
             return res.status(400).json({ success: false, error: { code: 'INVALID_BODY', message: 'ต้องมี userid, cryptoid, amount, price, type' } });
         }
+
+        if (amount <= 0) {
+            return res.status(400).json({ success: false, error: { code: 'INVALID_AMOUNT', message: 'Amount must be greater than 0' } });
+        }
+
+        if (price < 0) {
+            return res.status(400).json({ success: false, error: { code: 'INVALID_PRICE', message: 'Price must be greater than 0' } });
+        }
+
         const upType = String(type).toUpperCase();
         if (!['BUY', 'SELL'].includes(upType)) {
             return res.status(400).json({ success: false, error: { code: 'INVALID_TYPE', message: 'type ต้องเป็น BUY หรือ SELL' } });
         }
 
+        if (type === 'SELL') {
+            const wallet = await Wallet.findOne({ where: { userid, cryptoid }, attributes: ['amount'] });
+            if (!wallet) {
+                return res.status(400).json({ success: false, error: { code: 'WALLET_NOT_FOUND', message: 'Wallet not found' } });
+            }
+            if (wallet.amount < amount) {
+                return res.status(400).json({ success: false, error: { code: 'WALLET_NOT_ENOUGH', message: 'Wallet not enough' } });
+            }
+        } else if (type === 'BUY') {
+            const users = await Users.findOne({ where: { id: userid }, attributes: ['money'] });
+            if (!users) {
+                return res.status(400).json({ success: false, error: { code: 'USER_NOT_FOUND', message: 'User not found' } });
+            }
+            if (users.money < price * amount) {
+                return res.status(400).json({ success: false, error: { code: 'USER_NOT_ENOUGH', message: 'Money not enough' } });
+            }
+        }
+
         const created = await Order.create({ userid, cryptoid, amount, price, type: upType });
-        appendLogJson({ event: 'CREATE', order: created.toJSON() });
+        appendLogJson({ event: 'CREATE', order: created.toJSON() }, 'orders');
 
         // schedule matching
         pendingMatch = true;
@@ -98,58 +112,60 @@ router.post('/', async (req, res) => {
 >> ตามไอดีที่เรารู้ว่า แมตกับอะไร  && ค่าอะไรที่เราต้องการจะเปลี่ยน
 
 */
-router.put('/:id', async (req, res) => {
+router.put('/', requireAuth, async (req, res) => {
   try {
-    const id = Number(req.params.id);
-    const order = await Order.findByPk(id);
+    const {amount, price, orderid} = req.body;
+
+    const order = await Order.findOne({ where: { id: orderid } });
 
     if (!order) {
       return res.status(404).json({ success: false, error: { code: 'ORDER_NOT_FOUND', message: 'ไม่พบออเดอร์' } });
     }
 
-    // อัปเดตเฉพาะค่าที่ส่งมา
-    const { userid, cryptoid, amount, price, type } = req.body;
+    if (amount) order.amount = amount;
+    if (price) order.price = price;
 
-    if (userid !== undefined) order.userid = userid;
-    if (cryptoid !== undefined) order.cryptoid = cryptoid;
-    if (amount !== undefined) order.amount = amount;
-    if (price !== undefined) order.price = price;
-    if (type !== undefined) order.type = String(type).toUpperCase();
+    if (order.type === 'SELL') {
+        const wallet = await Wallet.findOne({ where: { userid: order.userid }, attributes: ['amount'] });
+        if (!wallet) {
+            return res.status(400).json({ success: false, error: { code: 'WALLET_NOT_FOUND', message: 'Wallet not found' } });
+        }
+        if (wallet.amount < order.amount) {
+            return res.status(400).json({ success: false, error: { code: 'WALLET_NOT_ENOUGH', message: 'Wallet not enough' } });
+        }
+    } else if (order.type === 'BUY') {
+        const users = await Users.findOne({ where: { id: order.userid }, attributes: ['money'] });
+        if (!users) {
+            return res.status(400).json({ success: false, error: { code: 'USER_NOT_FOUND', message: 'User not found' } });
+        }
+        if (users.money < order.price * order.amount) {
+            return res.status(400).json({ success: false, error: { code: 'USER_NOT_ENOUGH', message: 'Money not enough' } });
+        }
+    }
 
     await order.save();
 
-    appendLogJson({ event: 'UPDATE', order: order.toJSON() });
+    appendLogJson({ event: 'UPDATE', order: order.toJSON() }, 'orders');
     pendingMatch = true;
 
     res.json({ success: true, data: order });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ success: false, error: { code: 'ORDER_UPDATE_FAILED', message: err.message } });
   }
 });
 
 // DELETE /api/order/:id -> cancel order
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireAuth, async (req, res) => {
     try {
         const id = Number(req.params.id);
         const found = await Order.findByPk(id);
         if (!found) return res.status(404).json({ success: false, error: { code: 'ORDER_NOT_FOUND', message: 'ไม่พบออเดอร์' } });
         await Order.destroy({ where: { id } });
-        appendLogJson({ event: 'CANCEL', order: found.toJSON() });
+        appendLogJson({ event: 'CANCEL', order: found.toJSON() }, 'orders');
         res.json({ success: true });
     } catch (err) {
         res.status(500).json({ success: false, error: { code: 'ORDER_DELETE_FAILED', message: err.message } });
-    }
-});
-
-// POST /api/order/match -> trigger matching immediately
-router.post('/match', async (req, res) => {
-    try {
-        pendingMatch = true;
-        // run in background; respond fast
-
-        res.json({ success: true, message: 'matching scheduled' });
-    } catch (err) {
-        res.status(500).json({ success: false, error: { code: 'MATCH_TRIGGER_FAILED', message: err.message } });
     }
 });
 
@@ -199,6 +215,49 @@ async function runMatching() {
                     const sell = sells[si];
                     if (Number(buy.price) < Number(sell.price)) break; // no more match
 
+                    const sellerWallet = await Wallet.findOne({
+                        where: { 
+                            userid: sell.userid, 
+                            cryptoid: cryptoid
+                        },
+                        transaction: t
+                    });
+
+                    let iscontinue = false;
+
+                    if (!sellerWallet || Number(sellerWallet.amount) < Number(sell.amount)) {
+                        appendLogJson({
+                            event: 'MATCH_ERROR',
+                            error: `Seller ${sell.userid} does not have enough crypto ${cryptoid}`,
+                            orderId: sell.id
+                        }, 'orders');
+
+                        await Order.destroy({ where: { id:sell.id }, transaction: t });
+                        si++;
+                        iscontinue = true;
+                    }
+
+                    const totalCost = Number(buy.amount) * Number(sell.price);
+                    const buyerBalance = await Users.findOne({
+                        where: { id: buy.userid },
+                        attributes: ['money'],
+                        transaction: t
+                    });
+
+                    if (!buyerBalance || Number(buyerBalance.money) < totalCost) {
+                        appendLogJson({
+                            event: 'MATCH_ERROR',
+                            error: `Buyer ${buy.userid} does not have enough balance for order`,
+                            orderId: buy.id
+                        }, 'orders');
+
+                        await Order.destroy({ where: { id:buy.id }, transaction: t });
+                        bi++;
+                        iscontinue = true;
+                    }
+
+                    if (iscontinue) continue;
+
                     const tradeAmount = Math.min(Number(buy.amount), Number(sell.amount));
                     const tradePrice = Number(sell.price); // execute at sell price
 
@@ -210,7 +269,23 @@ async function runMatching() {
                         sellId: sell.id,
                         amount: tradeAmount,
                         price: tradePrice
+                    }, 'orders');
+
+                    await Users.update(
+                        { money: Number(buyerBalance.money) - (tradeAmount * tradePrice) },
+                        { where: { id: buy.userid }, transaction: t }
+                    );
+
+                    const sellerUser = await Users.findOne({
+                        where: { id: sell.userid },
+                        attributes: ['money'],
+                        transaction: t
                     });
+                    
+                    await Users.update(
+                        { money: Number(sellerUser.money) + (tradeAmount * tradePrice) },
+                        { where: { id: sell.userid }, transaction: t }
+                    );
 
                     // --- เพิ่มอัปเดต wallet ---
                     // BUY: เพิ่มเหรียญให้ผู้ซื้อ
@@ -248,7 +323,8 @@ async function runMatching() {
             });
         }
     } catch (err) {
-        appendLogJson({ event: 'MATCH_ERROR', error: String(err && err.message ? err.message : err) });
+        console.error(err);
+        appendLogJson({ event: 'MATCH_ERROR', error: String(err && err.message ? err.message : err) }, 'orders');
     } finally {
         isMatching = false;
     }

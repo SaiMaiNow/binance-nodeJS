@@ -1,8 +1,8 @@
 const express = require('express');
 const router = express.Router();
 
-const Users  = require('../../models/users');
-const{requireAuth, requireOwnership} = require('../../function/users.service');
+const Users  = require('../../../models/users');
+const{requireAuth, requireOwnership} = require('../../../function/users');
 
 router.post("/register", async (req, res) => {
   const { fName, lName, email, password, tel, birthday } = req.body;
@@ -33,15 +33,12 @@ router.post("/register", async (req, res) => {
 });
 
 router.put("/update", requireAuth, async (req, res) => {
-  const { fName, lName, email, password, tel } = req.body;
+  const { id, fName, lName, email, password, tel } = req.body;
 
   try {
     if (!fName && !lName && !tel && !email && !password) return res.status(400).json({ message: "No fields to update" });
 
-    const userCache = req.session.user;
-    if (!userCache?.email) return res.status(400).json({ message: "User is not Logged in" });
-
-    const userQuery = await Users.findOne({ where: { email: userCache.email } });
+    const userQuery = await Users.findOne({ where: { id: id } });
     if (!userQuery) {
       return res.status(400).json({ message: "User not found" });
     }
@@ -58,7 +55,7 @@ router.put("/update", requireAuth, async (req, res) => {
     if (email) NewEmail = email;
     if (password) NewPassword = password;
 
-    const updateQuery = await Users.update({ firstName: NewFName, lastName: NewLName, tel: NewTel, email: NewEmail, password: NewPassword }, { where: { email: userCache.email } });
+    const updateQuery = await Users.update({ firstName: NewFName, lastName: NewLName, tel: NewTel, email: NewEmail, password: NewPassword }, { where: { id: id } });
     if (!updateQuery) {
       return res.status(400).json({ message: "User update failed" });
     }
@@ -118,16 +115,14 @@ router.post('/logout',requireAuth, async (req, res) => {
 
 });
 
-router.get('/check',requireAuth, (req, res) => {
+router.get('/check', requireAuth, (req, res) => {
     try {
-
       return res.status(200).json({
           message: 'Authenticated',
           user: {
               email: req.session.user.email,
           }
       });
-  
   } catch (err) {
       console.error('Authenticated:', err);
       res.status(500).json({message: 'Internal server error' });
@@ -160,12 +155,12 @@ router.get('/:id', requireAuth, requireOwnership, async (req, res) => {
   }
 });
 
-router.delete('/delete', requireAuth, async (req, res) => {
+router.delete('/delete/:id', requireOwnership, async (req, res) => {
   try {
-    const userCache = req.session.user;
+    const userId = req.params.id;
     
     const deleteQuery = await Users.destroy({
-      where: { email: userCache.email } 
+      where: { id: userId } 
     });
     
     if (!deleteQuery) {
@@ -186,9 +181,9 @@ router.delete('/delete', requireAuth, async (req, res) => {
   }
 });
 
-router.post('/deposit', requireAuth, async (req, res) => {
+router.post('/deposit', requireOwnership, async (req, res) => {
   try {
-    const { amount } = req.body;
+    const { id, amount } = req.body;
     
     if (!amount) {
       return res.status(400).json({ message: 'Amount is required' });
@@ -201,7 +196,7 @@ router.post('/deposit', requireAuth, async (req, res) => {
     }
     
     const user = await Users.findOne({
-      where: { email: req.session.user.email },
+      where: { id: id },
       attributes: ['id', 'email', 'money']
     });
     
@@ -235,9 +230,9 @@ router.post('/deposit', requireAuth, async (req, res) => {
   }
 });
 
-router.post('/withdraw', requireAuth, async (req, res) => {
+router.post('/withdraw', requireOwnership, async (req, res) => {
   try {
-    const { amount } = req.body;
+    const { id, amount } = req.body;
     
     if (!amount) {
       return res.status(400).json({ message: 'Amount is required' });
@@ -250,7 +245,7 @@ router.post('/withdraw', requireAuth, async (req, res) => {
     }
     
     const user = await Users.findOne({
-      where: { email: req.session.user.email },
+      where: { id: id },
       attributes: ['id', 'email', 'money']
     });
     
@@ -272,7 +267,7 @@ router.post('/withdraw', requireAuth, async (req, res) => {
     
     await Users.update(
       { money: newBalance.toFixed(2) },
-      { where: { email: req.session.user.email } }
+      { where: { id: id } }
     );
     
     res.status(200).json({

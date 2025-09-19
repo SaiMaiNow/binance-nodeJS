@@ -13,7 +13,7 @@ async function requireOwnership(req, res, next) {
       return res.status(401).json({ message: 'Authentication required' });
     }
     
-    const userId = req.params.id;
+    const userId = req.params.id || req.body?.id;
     const sessionUserEmail = req.session.user.email; 
     
     const user = await Users.findOne({
@@ -21,12 +21,11 @@ async function requireOwnership(req, res, next) {
       attributes: ['id', 'email']
     });
     
-    if (!user || user.id != userId) {
+    if (!user || !userId || user.id != userId) {
       return res.status(403).json({ message: 'Access denied - Not profile owner' });
     }
     
     next();
-    
   } catch (error) {
     console.error('Ownership check error:', error);
     res.status(500).json({ message: 'Authorization error' });

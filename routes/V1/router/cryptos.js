@@ -1,18 +1,16 @@
 const express = require('express');
 const router = express.Router();
-const cryptosService = require('../../function/cryptos');
-
+const cryptosService = require('../../../function/cryptos');
+const { requireAuth } = require('../../../function/users');
 
 // GET /api/cryptos
-router.get('/', listSupported);
+router.get('/', requireAuth, listSupported);
 
 // GET /api/cryptos/all (ทุกเหรียญที่ขาย)
-router.get('/all', getAllPrices);
+router.get('/all', requireAuth, getAllPrices);
 
 // GET /api/cryptos/:symbol
-router.get('/:symbol', getPrice);
-
-
+router.get('/:symbol', requireAuth, getPrice);
 
 // Logic Action API
 async function listSupported(req, res) {

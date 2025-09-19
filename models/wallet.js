@@ -11,7 +11,7 @@ const Wallet = sequelize.define('wallet', {
     },
     cryptoid:{
         type: DataTypes.INTEGER,
-        references: { model: 'crypto', key: 'id' },
+        references: { model: 'cryptos', key: 'id' },
         primaryKey: true,
         allowNull: false,
     },
@@ -23,6 +23,8 @@ const Wallet = sequelize.define('wallet', {
         type: DataTypes.FLOAT,
         allowNull: false,
     }
+}, {
+    timestamps: false
 });
 
 module.exports = Wallet;

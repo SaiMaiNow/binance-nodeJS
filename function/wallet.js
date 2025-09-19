@@ -1,3 +1,8 @@
+const Users  = require('../models/users');
+const Crypto  = require('../models/crypto');
+const Wallet  = require('../models/wallet');
+const { appendLogJson } = require('./log');
+
 async function addWallet(req, res) {
     const userId = req.params.id;
     const { cryptoid, amount, price } = req.body;

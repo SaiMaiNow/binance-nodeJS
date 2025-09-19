@@ -14,7 +14,7 @@ const Order = sequelize.define('order', {
     },
     cryptoid: {
         type: DataTypes.INTEGER,
-        references: { model: 'crypto', key: 'id' }
+        references: { model: 'cryptos', key: 'id' }
     },
     amount: {
         type: DataTypes.FLOAT
@@ -25,6 +25,8 @@ const Order = sequelize.define('order', {
     type: {
         type: DataTypes.STRING
     }
+}, {
+    timestamps: false
 });
 
 module.exports = Order;

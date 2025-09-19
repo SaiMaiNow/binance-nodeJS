@@ -2,7 +2,7 @@ const { DataTypes } = require('sequelize');
 
 const { sequelize } = require('../function/postgre');
 
-const Crypto = sequelize.define('crypto', {
+const Crypto = sequelize.define('cryptos', {
     id: {
         type: DataTypes.INTEGER,
         autoIncrement: true,
@@ -11,6 +11,8 @@ const Crypto = sequelize.define('crypto', {
     cryptoname: {
         type: DataTypes.STRING
     }
+}, {
+    timestamps: false
 });
 
 module.exports = Crypto;

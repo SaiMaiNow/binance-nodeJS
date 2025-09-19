@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 
 const Users  = require('../../models/users');
+const{requireAuth, requireOwnership} = require('../../function/users.service');
 
 router.post("/register", async (req, res) => {
   const { fName, lName, email, password, tel, birthday } = req.body;
@@ -31,7 +32,7 @@ router.post("/register", async (req, res) => {
   }
 });
 
-router.put("/update", async (req, res) => {
+router.put("/update", requireAuth, async (req, res) => {
   const { fName, lName, email, password, tel } = req.body;
 
   try {
@@ -141,7 +142,7 @@ router.get('/:id', requireAuth, requireOwnership, async (req, res) => {
 
     const userData = await Users.findOne({
       where: { id: userId },
-      attributes: ['id', 'firstName', 'lastName', 'email', 'tel', 'birthDate']
+      attributes: ['id', 'firstName', 'lastName', 'email', 'tel', 'birthday','money']
     });
     
     if (!userData) {
@@ -185,6 +186,112 @@ router.delete('/delete', requireAuth, async (req, res) => {
   }
 });
 
+router.post('/deposit', requireAuth, async (req, res) => {
+  try {
+    const { amount } = req.body;
+    
+    if (!amount) {
+      return res.status(400).json({ message: 'Amount is required' });
+    }
+    
+    const depositAmount = parseFloat(amount);
+    
+    if (isNaN(depositAmount) || depositAmount <= 0) {
+      return res.status(400).json({ message: 'Invalid amount' });
+    }
+    
+    const user = await Users.findOne({
+      where: { email: req.session.user.email },
+      attributes: ['id', 'email', 'money']
+    });
+    
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    //calculate new balance
+    const currentBalance = parseFloat(user.money) || 0;
+    const newBalance = currentBalance + depositAmount;
+    
+    await Users.update(
+      { money: newBalance.toFixed(2) },
+      { where: { email: req.session.user.email } }
+    );
+    
+    res.status(200).json({
+      message: 'Deposit successful',
+      transaction: {
+        type: 'deposit',
+        amount: depositAmount,
+        previousBalance: currentBalance,
+        newBalance: newBalance,
+        timestamp: new Date().toLocaleString("th-TH", { timeZone: "Asia/Bangkok" })
+      }
+    });
+    
+  } catch (error) {
+    console.error('Deposit error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+router.post('/withdraw', requireAuth, async (req, res) => {
+  try {
+    const { amount } = req.body;
+    
+    if (!amount) {
+      return res.status(400).json({ message: 'Amount is required' });
+    }
+    
+    const withdrawAmount = parseFloat(amount);
+    
+    if (isNaN(withdrawAmount) || withdrawAmount <= 0) {
+      return res.status(400).json({ message: 'Invalid amount' });
+    }
+    
+    const user = await Users.findOne({
+      where: { email: req.session.user.email },
+      attributes: ['id', 'email', 'money']
+    });
+    
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    const currentBalance = parseFloat(user.money) || 0;
+    
+    if (currentBalance < withdrawAmount) {
+      return res.status(400).json({ 
+        message: 'Insufficient balance',
+        currentBalance: currentBalance,
+        requestedAmount: withdrawAmount
+      });
+    }
+    
+    const newBalance = currentBalance - withdrawAmount;
+    
+    await Users.update(
+      { money: newBalance.toFixed(2) },
+      { where: { email: req.session.user.email } }
+    );
+    
+    res.status(200).json({
+      message: 'Withdrawal successful',
+      transaction: {
+        type: 'withdrawal',
+        amount: withdrawAmount,
+        previousBalance: currentBalance,
+        newBalance: newBalance,
+        timestamp: new Date().toLocaleString("th-TH", { timeZone: "Asia/Bangkok" })
+      }
+    });
+    
+  } catch (error) {
+    console.error('Withdraw error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
 
 
 function validateBirthday(birthday) {
@@ -194,35 +301,6 @@ function validateBirthday(birthday) {
   if (dateFormat > currentYear) return false;
   if (age > 100 || age < 20) return false;
   return true;
-}
-
-function requireAuth(req, res, next) {
-  if (!req.session || !req.session.user) {
-    return res.status(401).json({ message: 'Authentication required' });
-  }
-  next();
-}
-
-function requireOwnership(req, res, next) {
-  if (!req.session || !req.session.user) {
-    return res.status(401).json({ message: 'Authentication required' });
-  }
-  
-  const userId = req.params.id;
-  const sessionUserEmail = req.session.user.email; 
-  
-  Users.findOne({
-    where: { email: sessionUserEmail } 
-  }).then(user => {
-      if (!user || user.id != userId) {
-        return res.status(403).json({ message: 'Access denied - Not profile owner' });
-      }
-      next();
-    })
-    .catch(error => {
-      console.error('Ownership check error:', error);
-      res.status(500).json({ message: 'Authorization error' });
-    });
 }
 
 module.exports = router;

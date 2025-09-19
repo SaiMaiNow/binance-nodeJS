@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 
 const Users  = require('../../models/users');
+const{requireAuth, requireOwnership} = require('../../function/users.service');
 
 router.post("/register", async (req, res) => {
   const { fName, lName, email, password, tel, birthDate } = req.body;
@@ -300,35 +301,6 @@ function validateBirthday(birthday) {
   if (dateFormat > currentYear) return false;
   if (age > 100 || age < 20) return false;
   return true;
-}
-
-function requireAuth(req, res, next) {
-  if (!req.session || !req.session.user) {
-    return res.status(401).json({ message: 'Authentication required' });
-  }
-  next();
-}
-
-function requireOwnership(req, res, next) {
-  if (!req.session || !req.session.user) {
-    return res.status(401).json({ message: 'Authentication required' });
-  }
-  
-  const userId = req.params.id;
-  const sessionUserEmail = req.session.user.email; 
-  
-  Users.findOne({
-    where: { email: sessionUserEmail } 
-  }).then(user => {
-      if (!user || user.id != userId) {
-        return res.status(403).json({ message: 'Access denied - Not profile owner' });
-      }
-      next();
-    })
-    .catch(error => {
-      console.error('Ownership check error:', error);
-      res.status(500).json({ message: 'Authorization error' });
-    });
 }
 
 module.exports = router;

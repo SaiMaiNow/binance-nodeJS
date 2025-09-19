@@ -23,7 +23,7 @@ const Users = sequelize.define('users', {
     tel:{
         type: DataTypes.STRING
     },
-    birthDate:{
+    birthday:{
         type: DataTypes.DATE
     },
     money:{

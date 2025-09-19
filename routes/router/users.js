@@ -5,18 +5,18 @@ const Users  = require('../../models/users');
 const{requireAuth, requireOwnership} = require('../../function/users.service');
 
 router.post("/register", async (req, res) => {
-  const { fName, lName, email, password, tel, birthDate } = req.body;
+  const { fName, lName, email, password, tel, birthday } = req.body;
 
   try {
-    if (!fName || !lName || !tel || !email || !password || !birthDate) return res.status(400).json({ message: "No fields to register" });
+    if (!fName || !lName || !tel || !email || !password || !birthday) return res.status(400).json({ message: "No fields to register" });
 
-    if(!validateBirthday(birthDate)) return res.status(400).json({ message: "Invalid birthday" });
+    if(!validateBirthday(birthday)) return res.status(400).json({ message: "Invalid birthday" });
     const selectQuery = await Users.findOne({ where: { email } });
     if (selectQuery) {
       return res.status(400).json({ message: "User already exists" });
     }
 
-    const result = await Users.create({ firstName: fName, lastName: lName, email, password, tel, birthDate });
+    const result = await Users.create({ firstName: fName, lastName: lName, email, password, tel, birthday });
     if (!result) {
       return res.status(400).json({ message: "User registration failed" });
     }
@@ -142,7 +142,7 @@ router.get('/:id', requireAuth, requireOwnership, async (req, res) => {
 
     const userData = await Users.findOne({
       where: { id: userId },
-      attributes: ['id', 'firstName', 'lastName', 'email', 'tel', 'birthDate','money']
+      attributes: ['id', 'firstName', 'lastName', 'email', 'tel', 'birthday','money']
     });
     
     if (!userData) {

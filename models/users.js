@@ -23,11 +23,12 @@ const Users = sequelize.define('users', {
     tel:{
         type: DataTypes.STRING
     },
-    birthDate:{
+    birthday:{
         type: DataTypes.DATE
     },
     money:{
-        type: DataTypes.FLOAT
+        type: DataTypes.FLOAT,
+        defaultValue: 0 
     },
     createdAt:{
         type: DataTypes.DATE,

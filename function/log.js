@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
-function appendLogJson(entry, name) {
+function appendLogJson(entry, name = 'orders') {
     const logDir = path.join(__dirname, '../log');
     if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
     const logPath = path.join(logDir, `${name}.json`);
@@ -11,7 +11,7 @@ function appendLogJson(entry, name) {
             logs = JSON.parse(fs.readFileSync(logPath, 'utf8'));
         } catch (e) { logs = []; }
     }
-    logs.push(entry);
+    logs.push({ ts: new Date().toISOString(), ...entry });
     fs.writeFileSync(logPath, JSON.stringify(logs, null, 2));
 }
 

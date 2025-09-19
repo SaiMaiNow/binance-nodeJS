@@ -4,18 +4,18 @@ const router = express.Router();
 const Users  = require('../../models/users');
 
 router.post("/register", async (req, res) => {
-  const { fName, lName, email, password, tel, birthday } = req.body;
+  const { fName, lName, email, password, tel, birthDate } = req.body;
 
   try {
-    if (!fName || !lName || !tel || !email || !password || !birthday) return res.status(400).json({ message: "No fields to register" });
+    if (!fName || !lName || !tel || !email || !password || !birthDate) return res.status(400).json({ message: "No fields to register" });
 
-    if(!validateBirthday(birthday)) return res.status(400).json({ message: "Invalid birthday" });
+    if(!validateBirthday(birthDate)) return res.status(400).json({ message: "Invalid birthday" });
     const selectQuery = await Users.findOne({ where: { email } });
     if (selectQuery) {
       return res.status(400).json({ message: "User already exists" });
     }
 
-    const result = await Users.create({ firstName: fName, lastName: lName, email, password, tel, birthday });
+    const result = await Users.create({ firstName: fName, lastName: lName, email, password, tel, birthDate });
     if (!result) {
       return res.status(400).json({ message: "User registration failed" });
     }
@@ -31,7 +31,7 @@ router.post("/register", async (req, res) => {
   }
 });
 
-router.put("/update", async (req, res) => {
+router.put("/update", requireAuth, async (req, res) => {
   const { fName, lName, email, password, tel } = req.body;
 
   try {
@@ -141,7 +141,7 @@ router.get('/:id', requireAuth, requireOwnership, async (req, res) => {
 
     const userData = await Users.findOne({
       where: { id: userId },
-      attributes: ['id', 'firstName', 'lastName', 'email', 'tel', 'birthDate']
+      attributes: ['id', 'firstName', 'lastName', 'email', 'tel', 'birthDate','money']
     });
     
     if (!userData) {
@@ -182,6 +182,112 @@ router.delete('/delete', requireAuth, async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+router.post('/deposit', requireAuth, async (req, res) => {
+  try {
+    const { amount } = req.body;
+    
+    if (!amount) {
+      return res.status(400).json({ message: 'Amount is required' });
+    }
+    
+    const depositAmount = parseFloat(amount);
+    
+    if (isNaN(depositAmount) || depositAmount <= 0) {
+      return res.status(400).json({ message: 'Invalid amount' });
+    }
+    
+    const user = await Users.findOne({
+      where: { email: req.session.user.email },
+      attributes: ['id', 'email', 'money']
+    });
+    
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    //calculate new balance
+    const currentBalance = parseFloat(user.money) || 0;
+    const newBalance = currentBalance + depositAmount;
+    
+    await Users.update(
+      { money: newBalance.toFixed(2) },
+      { where: { email: req.session.user.email } }
+    );
+    
+    res.status(200).json({
+      message: 'Deposit successful',
+      transaction: {
+        type: 'deposit',
+        amount: depositAmount,
+        previousBalance: currentBalance,
+        newBalance: newBalance,
+        timestamp: new Date().toLocaleString("th-TH", { timeZone: "Asia/Bangkok" })
+      }
+    });
+    
+  } catch (error) {
+    console.error('Deposit error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+router.post('/withdraw', requireAuth, async (req, res) => {
+  try {
+    const { amount } = req.body;
+    
+    if (!amount) {
+      return res.status(400).json({ message: 'Amount is required' });
+    }
+    
+    const withdrawAmount = parseFloat(amount);
+    
+    if (isNaN(withdrawAmount) || withdrawAmount <= 0) {
+      return res.status(400).json({ message: 'Invalid amount' });
+    }
+    
+    const user = await Users.findOne({
+      where: { email: req.session.user.email },
+      attributes: ['id', 'email', 'money']
+    });
+    
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    const currentBalance = parseFloat(user.money) || 0;
+    
+    if (currentBalance < withdrawAmount) {
+      return res.status(400).json({ 
+        message: 'Insufficient balance',
+        currentBalance: currentBalance,
+        requestedAmount: withdrawAmount
+      });
+    }
+    
+    const newBalance = currentBalance - withdrawAmount;
+    
+    await Users.update(
+      { money: newBalance.toFixed(2) },
+      { where: { email: req.session.user.email } }
+    );
+    
+    res.status(200).json({
+      message: 'Withdrawal successful',
+      transaction: {
+        type: 'withdrawal',
+        amount: withdrawAmount,
+        previousBalance: currentBalance,
+        newBalance: newBalance,
+        timestamp: new Date().toLocaleString("th-TH", { timeZone: "Asia/Bangkok" })
+      }
+    });
+    
+  } catch (error) {
+    console.error('Withdraw error:', error);
+    res.status(500).json({ message: 'Internal server error' });
   }
 });
 

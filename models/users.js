@@ -27,7 +27,8 @@ const Users = sequelize.define('users', {
         type: DataTypes.DATE
     },
     money:{
-        type: DataTypes.FLOAT
+        type: DataTypes.FLOAT,
+        defaultValue: 0 
     },
     createdAt:{
         type: DataTypes.DATE,

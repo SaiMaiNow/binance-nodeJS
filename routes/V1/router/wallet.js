@@ -50,7 +50,7 @@ async function getWallet(req, res) {
                 }
             }))
         };
-        res.json(userWallet);
+        res.status(200).json(userWallet);
     } catch (err) {
         res.status(500).json({ error: 'Database error', detail: err.message });
     }

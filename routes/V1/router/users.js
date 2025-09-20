@@ -223,7 +223,6 @@ router.post('/deposit', requireOwnership, async (req, res) => {
         timestamp: new Date().toLocaleString("th-TH", { timeZone: "Asia/Bangkok" })
       }
     });
-    
   } catch (error) {
     console.error('Deposit error:', error);
     res.status(500).json({ message: 'Internal server error' });

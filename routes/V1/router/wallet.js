@@ -41,12 +41,17 @@ async function getWallet(req, res) {
                         error: "Invalid symbol"
                     };
                 }
+
+                const cost = row.price * row.amount;ß
+                const value = currentPrice * row.amount;
+                const profit = value - cost;
+                const percent = (profit / cost) * 100;
                 return {
                     crypto: row.cryptoid,
                     amount: row.amount,
                     buyPrice: row.price,
                     currentPrice: currentPrice,
-                    profit: Number(((currentPrice - row.price) * row.amount * 100).toFixed(2))
+                    profit: percent.toFixed(2) + '%'
                 }
             }))
         };

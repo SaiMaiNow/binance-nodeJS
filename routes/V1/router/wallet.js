@@ -42,7 +42,7 @@ async function getWallet(req, res) {
                     };
                 }
 
-                const cost = row.price * row.amount;ß
+                const cost = row.price * row.amount;
                 const value = currentPrice * row.amount;
                 const profit = value - cost;
                 const percent = (profit / cost) * 100;

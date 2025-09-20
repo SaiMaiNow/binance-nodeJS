@@ -15,15 +15,13 @@ let pendingMatch = false;
 let isMatching = false;
 let Istart = false; // เริ่ม false
 
-// GET /api/order/book?cryptoid=1 -> order book by symbol/cryptoid
+// GET /api/order/book
 /*
---- คือเราดึงข้อมูลการซื้อขายมาทั้ง 2 ฝั่งคือ :  BUY / SELL        !! แต่เฉพาะเหรียญที่เราเรียกนะ ตาม id ของเหรียญนั้นๆ (เช่น  BTC : _id:1_ )
+--- คือเราดึงข้อมูลการซื้อขายมาทั้ง 2 ฝั่งคือ :  BUY / SELL 
 */
 router.get('/book', requireAuth, async (req, res) => {
     try {
-        const where = {};
-        if (req.query.cryptoid) where.cryptoid = Number(req.query.cryptoid);
-        const all = await Order.findAll({ where });
+        const all = await Order.findAll();
         const buys = all.filter(o => String(o.type).toUpperCase() === 'BUY')
             .sort((a, b) => (b.price - a.price) || (a.id - b.id));
         const sells = all.filter(o => String(o.type).toUpperCase() === 'SELL')
